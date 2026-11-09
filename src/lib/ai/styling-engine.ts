@@ -394,3 +394,4 @@ function hydrateOutfits(outfits: OutfitCombination[], wardrobe: WardrobeItem[]):
       .filter((i): i is WardrobeItem => Boolean(i)),
   }));
 }
+

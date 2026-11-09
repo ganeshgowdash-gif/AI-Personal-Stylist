@@ -25,3 +25,4 @@ export function isSupabaseConfigured(): boolean {
     !url.includes('placeholder')
   );
 }
+

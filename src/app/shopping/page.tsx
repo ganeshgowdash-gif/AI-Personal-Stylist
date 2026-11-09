@@ -230,3 +230,4 @@ export default function SmartShoppingPage() {
     </div>
   );
 }
+

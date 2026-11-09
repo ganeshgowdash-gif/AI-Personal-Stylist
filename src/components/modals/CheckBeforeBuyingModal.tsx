@@ -306,3 +306,4 @@ export const CheckBeforeBuyingModal: React.FC<CheckBeforeBuyingModalProps> = ({
     </div>
   );
 };
+

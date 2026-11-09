@@ -86,3 +86,4 @@ export const ClothingCard: React.FC<ClothingCardProps> = ({ item, onClick }) => 
     </div>
   );
 };
+

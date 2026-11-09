@@ -239,3 +239,4 @@ export const OutfitCard: React.FC<OutfitCardProps> = ({
     </div>
   );
 };
+

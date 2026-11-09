@@ -214,3 +214,4 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 3. **Occasion First**: The styling engine strictly requires an occasion before generating outfits.
 4. **Separate Storage Buckets**: Original photos are stored in `wardrobe-originals`, AI model previews in `outfit-previews`, and personal try-on photos in `user-tryon` with explicit consent and instant delete controls.
 5. **Transparency**: Every preview is labeled *"AI-generated preview, not an exact fit simulation"*.
+

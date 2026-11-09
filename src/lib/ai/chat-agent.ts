@@ -171,3 +171,4 @@ function generateLocalChatResponse(
     referencedItems: featured,
   };
 }
+

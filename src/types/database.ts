@@ -236,3 +236,4 @@ export interface CheckBeforeBuyingResult {
     why_it_works: string;
   }>;
 }
+

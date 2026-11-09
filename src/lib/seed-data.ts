@@ -222,3 +222,4 @@ export const INITIAL_DEMO_WARDROBE: Omit<WardrobeItem, 'user_id'>[] = [
     updated_at: new Date(Date.now() - 86400000 * 10).toISOString(),
   }
 ];
+

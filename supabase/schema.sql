@@ -376,3 +376,4 @@ CREATE POLICY "Users can manage own try-on photos"
     bucket_id = 'user-tryon' AND
     (storage.foldername(name))[1] = auth.uid()::text
   );
+

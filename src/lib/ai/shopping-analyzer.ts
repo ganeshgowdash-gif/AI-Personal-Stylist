@@ -291,3 +291,4 @@ function colorDistance(hex1: string, hex2: string): number {
 
   return Math.sqrt(Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2));
 }
+

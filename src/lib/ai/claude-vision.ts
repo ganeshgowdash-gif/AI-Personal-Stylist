@@ -233,3 +233,4 @@ function generateIntelligentHeuristic(base64Sample: string): RecognizedClothing 
 
   return presets[positiveHash % presets.length];
 }
+

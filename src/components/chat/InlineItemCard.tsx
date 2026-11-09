@@ -39,3 +39,4 @@ export const InlineItemCard: React.FC<InlineItemCardProps> = ({ item, onClick })
     </div>
   );
 };
+

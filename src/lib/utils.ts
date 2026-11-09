@@ -72,3 +72,4 @@ export const ALL_OCCASIONS = [
   'Sports and gym',
   'Other'
 ] as const;
+
