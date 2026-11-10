@@ -1,77 +1,54 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Subcategory, ClothingCategory, ClothingPattern, ClothingStyle, ClothingFit, Season, ColorInfo } from '@/types/database';
+import { WardrobeCategory, ClothingPattern, ClothingStyle } from '@/types/database';
 
-export interface RecognizedClothing {
+export interface RecognizedGarment {
+  category: WardrobeCategory;
   name: string;
-  category: ClothingCategory;
-  subcategory: Subcategory;
+  item_type: string;
   primary_color: string;
   primary_color_hex: string;
-  secondary_colors: ColorInfo[];
+  secondary_color?: string | null;
+  secondary_color_hex?: string | null;
   pattern: ClothingPattern;
   style: ClothingStyle;
-  fit: ClothingFit;
-  season: Season;
   confidence_score: number;
-  brand?: string | null;
   notes?: string;
 }
 
-const CATEGORY_MAP: Record<Subcategory, ClothingCategory> = {
-  'shirt': 'tops',
-  't-shirt': 'tops',
-  'polo': 'tops',
-  'hoodie': 'tops',
-  'sweater': 'tops',
-  'jeans': 'bottoms',
-  'chinos': 'bottoms',
-  'formal pants': 'bottoms',
-  'shorts': 'bottoms',
-  'joggers': 'bottoms',
-  'jacket': 'outerwear',
-  'sneakers': 'footwear',
-  'formal shoes': 'footwear',
-  'sandals': 'footwear',
-  'watch': 'accessories',
-  'belt': 'accessories',
-  'sunglasses': 'accessories',
-  'other': 'accessories',
-};
-
-export async function recognizeClothingImage(
+export async function recognizeGarment(
   imageBase64: string,
-  mimeType: string = 'image/jpeg'
-): Promise<RecognizedClothing> {
+  mimeType: string = 'image/jpeg',
+  categoryHint?: WardrobeCategory
+): Promise<RecognizedGarment> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  // Clean base64 string
   const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
   if (apiKey && !apiKey.includes('your-anthropic-api-key') && apiKey.startsWith('sk-ant')) {
     try {
       const anthropic = new Anthropic({ apiKey });
 
-      const prompt = `You are an expert haute couture fashion stylist and master garment analyzer for the "AI Personal Stylist" platform.
-Examine this clothing/accessory image with extreme precision and return ONLY valid JSON with no markdown wrapping or preamble:
+      const prompt = `You are an expert clothing analyzer for a Personal Digital Wardrobe.
+Analyze this uploaded photograph of a garment or pair of shoes.
+The wardrobe contains ONLY THREE CATEGORIES: "shirt", "pants", "shoes".
+
+Return ONLY valid JSON with no markdown wrapping:
 {
-  "name": "Concise high-fashion item name (e.g. 'Crisp Oxford Cotton Shirt', 'Tapered Vintage Indigo Jeans', 'Minimalist Chronograph Watch')",
-  "subcategory": "One of: shirt, t-shirt, polo, jeans, chinos, formal pants, shorts, joggers, jacket, hoodie, sweater, sneakers, formal shoes, sandals, watch, belt, sunglasses, other",
-  "category": "One of: tops, bottoms, outerwear, footwear, accessories",
-  "primary_color": "Specific color name (e.g. Navy Blue, Alabaster White, Charcoal Gray, Olive Green)",
-  "primary_color_hex": "Accurate 6-character hex code starting with # (e.g. #1B263B, #FFFFFF, #2C3E50)",
-  "secondary_colors": [{"name": "Color name", "hex": "#HEX"}],
+  "category": "${categoryHint || 'One of: shirt, pants, shoes'}",
+  "name": "Concise natural item name (e.g. 'Navy Blue Oxford Shirt', 'Beige Slim Chinos', 'White Leather Sneakers')",
+  "item_type": "Specific type (for shirts: formal shirt, casual shirt, t-shirt, polo t-shirt, oversized shirt; for pants: jeans, chinos, formal trousers, joggers, shorts; for shoes: sneakers, formal shoes, loafers, boots, sandals)",
+  "primary_color": "Specific color name (e.g. Navy Blue, Beige, Crisp White, Charcoal Black)",
+  "primary_color_hex": "Accurate 6-character hex code starting with # (e.g. #000080)",
+  "secondary_color": "Secondary color or null",
+  "secondary_color_hex": "#HEX or null",
   "pattern": "One of: solid, striped, checked, graphic, floral, printed, textured, other",
-  "style": "One of: formal, casual, sporty, traditional, party, smart-casual, streetwear",
-  "fit": "One of: slim, regular, oversized, relaxed, tailored",
-  "season": "One of: summer, winter, spring, autumn, monsoon, all-season",
-  "confidence_score": 0.95 (number between 0.70 and 0.99 based on visibility),
-  "brand": "Visible brand name or null",
-  "notes": "One or two sentences on fabric texture, silhouette, and optimal pairing potential"
+  "style": "One of: formal, casual, smart-casual, sporty, party, traditional",
+  "confidence_score": 0.96,
+  "notes": "Short description of texture, weave, and cut"
 }`;
 
       const response = await anthropic.messages.create({
         model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1000,
+        max_tokens: 800,
         messages: [
           {
             role: 'user',
@@ -96,26 +73,25 @@ Examine this clothing/accessory image with extreme precision and return ONLY val
       const textBlock = response.content.find((c) => c.type === 'text');
       if (textBlock && 'text' in textBlock) {
         const text = textBlock.text.trim();
-        // Remove markdown code fences if model enclosed it
         const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const parsed = JSON.parse(jsonText);
 
-        const subcategory = (parsed.subcategory || 'shirt').toLowerCase() as Subcategory;
-        const category = (parsed.category || CATEGORY_MAP[subcategory] || 'tops') as ClothingCategory;
+        let cat: WardrobeCategory = 'shirt';
+        if (parsed.category === 'pants' || parsed.category === 'shoes') {
+          cat = parsed.category;
+        }
 
         return {
-          name: parsed.name || 'Fashion Garment',
-          category,
-          subcategory,
-          primary_color: parsed.primary_color || 'Black',
-          primary_color_hex: parsed.primary_color_hex?.startsWith('#') ? parsed.primary_color_hex : '#000000',
-          secondary_colors: Array.isArray(parsed.secondary_colors) ? parsed.secondary_colors : [],
+          category: categoryHint || cat,
+          name: parsed.name || 'Garment',
+          item_type: parsed.item_type || (cat === 'shirt' ? 'casual shirt' : cat === 'pants' ? 'jeans' : 'sneakers'),
+          primary_color: parsed.primary_color || 'Blue',
+          primary_color_hex: parsed.primary_color_hex?.startsWith('#') ? parsed.primary_color_hex : '#1B263B',
+          secondary_color: parsed.secondary_color || null,
+          secondary_color_hex: parsed.secondary_color_hex || null,
           pattern: parsed.pattern || 'solid',
           style: parsed.style || 'casual',
-          fit: parsed.fit || 'regular',
-          season: parsed.season || 'all-season',
           confidence_score: parsed.confidence_score || 0.95,
-          brand: parsed.brand || null,
           notes: parsed.notes || '',
         };
       }
@@ -124,113 +100,61 @@ Examine this clothing/accessory image with extreme precision and return ONLY val
     }
   }
 
-  // Heuristic Vision Classifier Fallback
-  // Analyzes image hints or default wardrobe item representation
-  return generateIntelligentHeuristic(cleanBase64);
+  // Deterministic local classifier fallback
+  return getLocalGarmentHeuristic(cleanBase64, categoryHint);
 }
 
-function generateIntelligentHeuristic(base64Sample: string): RecognizedClothing {
-  // Deterministic seed based on base64 content
+function getLocalGarmentHeuristic(base64: string, hint?: WardrobeCategory): RecognizedGarment {
   let hash = 0;
-  for (let i = 0; i < Math.min(base64Sample.length, 200); i++) {
-    hash = (hash << 5) - hash + base64Sample.charCodeAt(i);
+  for (let i = 0; i < Math.min(base64.length, 150); i++) {
+    hash = (hash << 5) - hash + base64.charCodeAt(i);
     hash |= 0;
   }
-  const positiveHash = Math.abs(hash);
+  const posHash = Math.abs(hash);
 
-  const presets: RecognizedClothing[] = [
-    {
-      name: 'Essential Slim Cotton Shirt',
-      category: 'tops',
-      subcategory: 'shirt',
-      primary_color: 'Sky Blue',
-      primary_color_hex: '#87CEEB',
-      secondary_colors: [{ name: 'White', hex: '#FFFFFF' }],
+  if (hint === 'pants' || (!hint && posHash % 3 === 1)) {
+    return {
+      category: 'pants',
+      name: 'Tapered Chino Trousers',
+      item_type: 'chinos',
+      primary_color: 'Beige',
+      primary_color_hex: '#E1D9C5',
+      secondary_color: null,
+      secondary_color_hex: null,
       pattern: 'solid',
       style: 'smart-casual',
-      fit: 'slim',
-      season: 'all-season',
       confidence_score: 0.94,
-      brand: null,
-      notes: 'Lightweight breathable cotton with a modern semi-spread collar.',
-    },
-    {
-      name: 'Classic Tapered Denim Jeans',
-      category: 'bottoms',
-      subcategory: 'jeans',
-      primary_color: 'Navy Blue',
-      primary_color_hex: '#000080',
-      secondary_colors: [],
-      pattern: 'solid',
-      style: 'casual',
-      fit: 'regular',
-      season: 'all-season',
-      confidence_score: 0.96,
-      brand: null,
-      notes: 'Versatile deep indigo denim with subtle whiskering and stretch.',
-    },
-    {
-      name: 'Clean White Leather Sneakers',
-      category: 'footwear',
-      subcategory: 'sneakers',
+      notes: 'Clean tapered fit with neutral tone.',
+    };
+  }
+
+  if (hint === 'shoes' || (!hint && posHash % 3 === 2)) {
+    return {
+      category: 'shoes',
+      name: 'Leather Low-Top Shoes',
+      item_type: 'sneakers',
       primary_color: 'White',
       primary_color_hex: '#FFFFFF',
-      secondary_colors: [{ name: 'Off White', hex: '#F5F5F5' }],
+      secondary_color: 'Off-White',
+      secondary_color_hex: '#F5F5F5',
       pattern: 'solid',
       style: 'casual',
-      fit: 'regular',
-      season: 'all-season',
-      confidence_score: 0.97,
-      brand: null,
-      notes: 'Minimalist low-top leather silhouette suitable for both casual and smart-casual styling.',
-    },
-    {
-      name: 'Tailored Beige Chino Trousers',
-      category: 'bottoms',
-      subcategory: 'chinos',
-      primary_color: 'Beige',
-      primary_color_hex: '#F5F5DC',
-      secondary_colors: [],
-      pattern: 'solid',
-      style: 'smart-casual',
-      fit: 'slim',
-      season: 'summer',
-      confidence_score: 0.93,
-      brand: null,
-      notes: 'Refined neutral chinos that pair effortlessly with dark or pastel tops.',
-    },
-    {
-      name: 'Structured Charcoal Blazer',
-      category: 'outerwear',
-      subcategory: 'jacket',
-      primary_color: 'Charcoal',
-      primary_color_hex: '#36454F',
-      secondary_colors: [],
-      pattern: 'textured',
-      style: 'formal',
-      fit: 'tailored',
-      season: 'autumn',
-      confidence_score: 0.95,
-      brand: null,
-      notes: 'Structured wool-blend blazer with notch lapels and two-button closure.',
-    },
-    {
-      name: 'Minimalist Stainless Steel Watch',
-      category: 'accessories',
-      subcategory: 'watch',
-      primary_color: 'Silver',
-      primary_color_hex: '#C0C0C0',
-      secondary_colors: [{ name: 'Black', hex: '#000000' }],
-      pattern: 'solid',
-      style: 'smart-casual',
-      fit: 'regular',
-      season: 'all-season',
-      confidence_score: 0.98,
-      brand: null,
-      notes: 'Sleek brushed dial with silver indices, perfect for elevating any outfit.',
-    }
-  ];
+      confidence_score: 0.96,
+      notes: 'Minimalist low-top silhouette with clean soles.',
+    };
+  }
 
-  return presets[positiveHash % presets.length];
+  return {
+    category: 'shirt',
+    name: 'Cotton Oxford Shirt',
+    item_type: 'casual shirt',
+    primary_color: 'Navy Blue',
+    primary_color_hex: '#1B263B',
+    secondary_color: null,
+    secondary_color_hex: null,
+    pattern: 'solid',
+    style: 'smart-casual',
+    confidence_score: 0.95,
+    notes: 'Breathable cotton fabric with natural collar drape.',
+  };
 }
-

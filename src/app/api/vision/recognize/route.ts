@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recognizeClothingImage } from '@/lib/ai/claude-vision';
+import { recognizeGarment } from '@/lib/ai/claude-vision';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { imageBase64, mimeType } = body;
+    const { imageBase64, mimeType, categoryHint } = body;
 
     if (!imageBase64) {
       return NextResponse.json({ error: 'Image data is required' }, { status: 400 });
     }
 
-    const recognized = await recognizeClothingImage(imageBase64, mimeType || 'image/jpeg');
+    const recognized = await recognizeGarment(imageBase64, mimeType || 'image/jpeg', categoryHint);
     return NextResponse.json(recognized);
   } catch (error: any) {
     console.error('Vision Recognition API error:', error);
@@ -20,4 +20,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

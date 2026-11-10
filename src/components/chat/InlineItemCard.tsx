@@ -16,15 +16,15 @@ export const InlineItemCard: React.FC<InlineItemCardProps> = ({ item, onClick })
     >
       <div className="w-8 h-8 rounded-lg overflow-hidden bg-luxury-900 shrink-0 border border-white/10">
         <img
-          src={item.photo_url}
-          alt={item.name}
+          src={item.front_photo_url}
+          alt={item.name || item.item_type}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
         />
       </div>
 
       <div className="text-left overflow-hidden">
         <p className="text-[11px] font-semibold text-white truncate max-w-[140px] group-hover:text-luxury-200">
-          {item.name}
+          {item.name || `${item.primary_color} ${item.item_type}`}
         </p>
         <div className="flex items-center gap-1.5">
           <span
@@ -32,11 +32,10 @@ export const InlineItemCard: React.FC<InlineItemCardProps> = ({ item, onClick })
             style={{ backgroundColor: item.primary_color_hex }}
           />
           <span className="text-[9px] text-luxury-400 capitalize truncate">
-            {item.primary_color} • {item.subcategory}
+            {item.primary_color} • {item.item_type}
           </span>
         </div>
       </div>
     </div>
   );
 };
-

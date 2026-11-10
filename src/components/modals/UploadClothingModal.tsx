@@ -11,16 +11,18 @@ import {
   Palette, 
   Tag, 
   SlidersHorizontal,
-  Camera
+  Camera,
+  Info,
+  Layers
 } from 'lucide-react';
 import { useWardrobe } from '@/context/WardrobeContext';
 import { 
-  ClothingCategory, 
-  Subcategory, 
+  WardrobeCategory, 
   ClothingPattern, 
-  ClothingStyle, 
-  ClothingFit, 
-  Season 
+  ClothingStyle,
+  ShirtType,
+  PantsType,
+  ShoeType
 } from '@/types/database';
 import { POPULAR_COLORS } from '@/lib/utils';
 import { uploadWardrobeImage } from '@/lib/supabase/storage';
@@ -28,74 +30,103 @@ import { uploadWardrobeImage } from '@/lib/supabase/storage';
 interface UploadClothingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultCategory?: WardrobeCategory;
 }
 
-const SUBCATEGORIES: { id: Subcategory; label: string; category: ClothingCategory }[] = [
-  { id: 'shirt', label: 'Shirt (Casual/Formal)', category: 'tops' },
-  { id: 't-shirt', label: 'T-Shirt', category: 'tops' },
-  { id: 'polo', label: 'Polo Shirt', category: 'tops' },
-  { id: 'hoodie', label: 'Hoodie', category: 'tops' },
-  { id: 'sweater', label: 'Sweater / Knit', category: 'tops' },
-  { id: 'jeans', label: 'Jeans / Denim', category: 'bottoms' },
-  { id: 'chinos', label: 'Chinos / Trousers', category: 'bottoms' },
-  { id: 'formal pants', label: 'Formal Pants', category: 'bottoms' },
-  { id: 'shorts', label: 'Shorts', category: 'bottoms' },
-  { id: 'joggers', label: 'Joggers / Sweatpants', category: 'bottoms' },
-  { id: 'jacket', label: 'Jacket / Coat / Blazer', category: 'outerwear' },
-  { id: 'sneakers', label: 'Sneakers', category: 'footwear' },
-  { id: 'formal shoes', label: 'Formal Shoes / Loafers', category: 'footwear' },
-  { id: 'sandals', label: 'Sandals / Slides', category: 'footwear' },
-  { id: 'watch', label: 'Watch', category: 'accessories' },
-  { id: 'belt', label: 'Belt', category: 'accessories' },
-  { id: 'sunglasses', label: 'Sunglasses', category: 'accessories' },
-  { id: 'other', label: 'Other Accessory', category: 'accessories' },
+const SHIRT_TYPES: ShirtType[] = [
+  'formal shirt',
+  'casual shirt',
+  't-shirt',
+  'polo t-shirt',
+  'oversized shirt',
+  'printed shirt',
+  'other',
 ];
 
-const STYLES: ClothingStyle[] = ['formal', 'casual', 'sporty', 'traditional', 'party', 'smart-casual', 'streetwear'];
+const PANTS_TYPES: PantsType[] = [
+  'jeans',
+  'chinos',
+  'formal trousers',
+  'joggers',
+  'shorts',
+  'cargo pants',
+  'other',
+];
+
+const SHOE_TYPES: ShoeType[] = [
+  'sneakers',
+  'formal shoes',
+  'loafers',
+  'boots',
+  'sandals',
+  'running shoes',
+  'other',
+];
+
 const PATTERNS: ClothingPattern[] = ['solid', 'striped', 'checked', 'graphic', 'floral', 'printed', 'textured', 'other'];
-const FITS: ClothingFit[] = ['slim', 'regular', 'oversized', 'relaxed', 'tailored'];
-const SEASONS: Season[] = ['all-season', 'summer', 'winter', 'spring', 'autumn', 'monsoon'];
+const STYLES: ClothingStyle[] = ['casual', 'smart-casual', 'formal', 'sporty', 'party', 'traditional'];
 
-export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen, onClose }) => {
+export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ 
+  isOpen, 
+  onClose,
+  defaultCategory = 'shirt'
+}) => {
   const { addItem, user } = useWardrobe();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const frontInputRef = useRef<HTMLInputElement>(null);
+  const backInputRef = useRef<HTMLInputElement>(null);
 
-  // Form & Image State
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // Category
+  const [category, setCategory] = useState<WardrobeCategory>(defaultCategory);
+
+  // Photos
+  const [frontFile, setFrontFile] = useState<File | null>(null);
+  const [frontPreview, setFrontPreview] = useState<string | null>(null);
+  const [backFile, setBackFile] = useState<File | null>(null);
+  const [backPreview, setBackPreview] = useState<string | null>(null);
+
+  // AI & Processing States
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Editable AI Recognition Form Fields
+  // Editable Form Details
   const [name, setName] = useState('');
-  const [subcategory, setSubcategory] = useState<Subcategory>('shirt');
-  const [category, setCategory] = useState<ClothingCategory>('tops');
-  const [primaryColor, setPrimaryColor] = useState('Black');
-  const [primaryColorHex, setPrimaryColorHex] = useState('#000000');
+  const [itemType, setItemType] = useState('casual shirt');
+  const [primaryColor, setPrimaryColor] = useState('Navy Blue');
+  const [primaryColorHex, setPrimaryColorHex] = useState('#1B263B');
+  const [secondaryColor, setSecondaryColor] = useState('');
   const [pattern, setPattern] = useState<ClothingPattern>('solid');
   const [style, setStyle] = useState<ClothingStyle>('casual');
-  const [fit, setFit] = useState<ClothingFit>('regular');
-  const [season, setSeason] = useState<Season>('all-season');
-  const [brand, setBrand] = useState('');
   const [notes, setNotes] = useState('');
   const [confidenceScore, setConfidenceScore] = useState<number>(0.95);
   const [aiRecognized, setAiRecognized] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFrontFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setSelectedFile(file);
+    setFrontFile(file);
     setError(null);
 
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result as string;
-      setImagePreview(base64);
+      setFrontPreview(base64);
       await analyzeImageWithAi(base64, file.type);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleBackFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBackFile(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBackPreview(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -108,53 +139,42 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
       const res = await fetch('/api/vision/recognize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64Image, mimeType }),
+        body: JSON.stringify({ 
+          imageBase64: base64Image, 
+          mimeType,
+          categoryHint: category 
+        }),
       });
 
       if (!res.ok) {
-        throw new Error('AI analysis encountered an issue, but you can fill in details below.');
+        throw new Error('AI analysis encountered an issue, but you can enter details manually.');
       }
 
       const data = await res.json();
 
-      setName(data.name || 'Wardrobe Item');
-      setSubcategory(data.subcategory || 'shirt');
-      setCategory(data.category || 'tops');
-      setPrimaryColor(data.primary_color || 'Black');
-      setPrimaryColorHex(data.primary_color_hex || '#000000');
-      setPattern(data.pattern || 'solid');
-      setStyle(data.style || 'casual');
-      setFit(data.fit || 'regular');
-      setSeason(data.season || 'all-season');
-      if (data.brand) setBrand(data.brand);
+      setName(data.name || '');
+      if (data.category) setCategory(data.category);
+      if (data.item_type) setItemType(data.item_type);
+      if (data.primary_color) setPrimaryColor(data.primary_color);
+      if (data.primary_color_hex) setPrimaryColorHex(data.primary_color_hex);
+      if (data.secondary_color) setSecondaryColor(data.secondary_color);
+      if (data.pattern) setPattern(data.pattern);
+      if (data.style) setStyle(data.style);
       if (data.notes) setNotes(data.notes);
       setConfidenceScore(data.confidence_score || 0.95);
       setAiRecognized(true);
     } catch (err: any) {
       console.warn(err);
-      setError(err.message || 'Vision classification failed. Please enter details manually.');
-      setName('New Clothing Item');
+      setError('AI recognition failed. Please input details manually.');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleSubcategoryChange = (sub: Subcategory) => {
-    setSubcategory(sub);
-    const item = SUBCATEGORIES.find((s) => s.id === sub);
-    if (item) {
-      setCategory(item.category);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imagePreview) {
-      setError('Please upload a clothing photo.');
-      return;
-    }
-    if (!name.trim()) {
-      setError('Please provide an item name.');
+    if (!frontPreview) {
+      setError(category === 'shoes' ? 'Please upload a side-view photo of your shoes.' : 'Please upload a front photo of your clothing.');
       return;
     }
 
@@ -162,41 +182,53 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
     setError(null);
 
     try {
-      const tempId = `item-${Date.now()}`;
-      let finalPhotoUrl = imagePreview;
-      let storagePath = `wardrobe/${tempId}.jpg`;
+      const tempId = `${category}-${Date.now()}`;
+      let frontUrl = frontPreview;
+      let frontStorage = `originals/${tempId}_front.jpg`;
+      let backUrl: string | null = null;
+      let backStorage: string | null = null;
 
-      // Upload to Supabase Storage bucket 'wardrobe-originals'
-      if (selectedFile && user) {
-        const uploadResult = await uploadWardrobeImage(selectedFile, user.id, tempId);
-        finalPhotoUrl = uploadResult.publicUrl;
-        storagePath = uploadResult.storagePath;
+      // Upload Front to Supabase Storage
+      if (frontFile && user) {
+        const uploadRes = await uploadWardrobeImage(frontFile, user.id, `${tempId}_front`);
+        frontUrl = uploadRes.publicUrl;
+        frontStorage = uploadRes.storagePath;
+      }
+
+      // Upload Back to Supabase Storage (if provided)
+      if (backFile && user) {
+        const backUploadRes = await uploadWardrobeImage(backFile, user.id, `${tempId}_back`);
+        backUrl = backUploadRes.publicUrl;
+        backStorage = backUploadRes.storagePath;
+      } else if (backPreview) {
+        backUrl = backPreview;
+        backStorage = `originals/${tempId}_back.jpg`;
       }
 
       await addItem({
-        name,
         category,
-        subcategory,
+        name: name.trim() || undefined,
+        item_type: itemType,
         primary_color: primaryColor,
         primary_color_hex: primaryColorHex,
-        secondary_colors: [],
+        secondary_color: secondaryColor.trim() || null,
         pattern,
         style,
-        fit,
-        season,
-        brand: brand.trim() ? brand : null,
-        photo_url: finalPhotoUrl,
-        storage_path: storagePath,
-        notes: notes.trim() ? notes : null,
+        front_photo_url: frontUrl,
+        front_storage_path: frontStorage,
+        back_photo_url: backUrl,
+        back_storage_path: backStorage,
+        side_photo_url: category === 'shoes' ? frontUrl : null,
+        side_storage_path: category === 'shoes' ? frontStorage : null,
+        notes: notes.trim() || null,
         is_favorite: false,
         times_worn: 0,
         confidence_score: confidenceScore,
-        ai_metadata: { source: aiRecognized ? 'claude-vision' : 'manual' },
       });
 
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to save wardrobe item.');
+      setError(err?.message || 'Failed to save item to wardrobe.');
     } finally {
       setIsSaving(false);
     }
@@ -213,10 +245,10 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
             </div>
             <div>
               <h2 className="text-base font-semibold text-white tracking-wide">
-                Add Clothing to Wardrobe
+                Upload to Digital Wardrobe
               </h2>
               <p className="text-xs text-luxury-400">
-                AI Vision analyzes category, colors, fit, pattern, and style.
+                Upload your authentic photos to texture onto the 3D mannequin.
               </p>
             </div>
           </div>
@@ -236,268 +268,236 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
             </div>
           )}
 
-          {/* Photo Upload Zone */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-luxury-400 mb-2">
-                Garment Photo (Original)
-              </label>
-
-              {!imagePreview ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-64 border-2 border-dashed border-white/20 hover:border-white/40 rounded-2xl flex flex-col items-center justify-center p-6 cursor-pointer bg-white/[0.02] hover:bg-white/[0.04] transition-all group"
+          {/* Category Tabs: Only Shirts, Pants, Shoes */}
+          <div>
+            <label className="block text-xs font-mono uppercase tracking-wider text-luxury-400 mb-2">
+              Select Wardrobe Category
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['shirt', 'pants', 'shoes'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => {
+                    setCategory(cat);
+                    setItemType(cat === 'shirt' ? 'casual shirt' : cat === 'pants' ? 'jeans' : 'sneakers');
+                  }}
+                  className={`py-2.5 rounded-xl text-xs font-semibold capitalize transition-all ${
+                    category === cat
+                      ? 'bg-white text-black shadow-md shadow-white/10'
+                      : 'bg-white/[0.03] hover:bg-white/[0.08] text-luxury-300 border border-white/[0.06]'
+                  }`}
                 >
-                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-luxury-300 group-hover:scale-110 transition-transform mb-3">
-                    <UploadCloud className="w-6 h-6 text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-white mb-1">
-                    Click to upload photo
-                  </span>
-                  <span className="text-xs text-luxury-500 text-center">
-                    Supports high-res JPG, PNG, WEBP. Stored securely in Supabase Storage.
-                  </span>
-                </div>
-              ) : (
-                <div className="relative h-64 rounded-2xl overflow-hidden border border-white/10 group bg-luxury-900">
-                  {/* Image preview */}
-                  <img
-                    src={imagePreview}
-                    alt="Garment Preview"
-                    className="w-full h-full object-cover object-center"
-                  />
+                  {cat === 'shirt' ? 'My Shirts' : cat === 'pants' ? 'My Pants' : 'My Shoes'}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                  {/* AI Analysis Overlay */}
-                  {isAnalyzing && (
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-4">
-                      <RefreshCw className="w-8 h-8 text-white animate-spin mb-3" />
-                      <p className="text-xs font-mono uppercase tracking-widest text-white">
-                        AI Vision Analyzing Garment...
-                      </p>
-                      <p className="text-[11px] text-luxury-400 mt-1">
-                        Detecting category, primary hex, pattern & silhouette
-                      </p>
-                    </div>
-                  )}
-
-                  {!isAnalyzing && (
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                      {aiRecognized && (
-                        <div className="px-2.5 py-1 rounded-full text-[11px] font-mono bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5 backdrop-blur-md">
-                          <Sparkles className="w-3 h-3" />
-                          <span>AI Match: {(confidenceScore * 100).toFixed(0)}%</span>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-2.5 py-1 rounded-full text-xs bg-black/60 hover:bg-black/90 text-white border border-white/20 backdrop-blur-md transition-colors"
-                      >
-                        Change Photo
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+          {/* Photo Upload Zone (Front + Back) */}
+          <div className="space-y-3">
+            <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex items-center gap-2 text-xs text-luxury-300">
+              <Info className="w-4 h-4 text-luxury-400 shrink-0" />
+              <span>
+                {category === 'shoes'
+                  ? 'For shoes: Upload a side-view photo (required). A 2nd angle is optional.'
+                  : 'Front + Back photos give a more accurate 3D preview on the mannequin.'}
+              </span>
             </div>
 
-            {/* Editable AI Classification Form */}
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Front Photo (Required) */}
               <div>
                 <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                  Item Name
+                  {category === 'shoes' ? 'Side View Photo * (Required)' : 'Front View Photo * (Required)'}
                 </label>
+                {!frontPreview ? (
+                  <div
+                    onClick={() => frontInputRef.current?.click()}
+                    className="h-48 border-2 border-dashed border-white/20 hover:border-white/40 rounded-2xl flex flex-col items-center justify-center p-4 cursor-pointer bg-white/[0.02] hover:bg-white/[0.04] transition-all group"
+                  >
+                    <UploadCloud className="w-6 h-6 text-white group-hover:scale-110 transition-transform mb-2" />
+                    <span className="text-xs font-medium text-white mb-0.5">Click to upload</span>
+                    <span className="text-[10px] text-luxury-500">Your original photo</span>
+                  </div>
+                ) : (
+                  <div className="relative h-48 rounded-2xl overflow-hidden border border-white/10 bg-luxury-900 group">
+                    <img
+                      src={frontPreview}
+                      alt="Front Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    {isAnalyzing && (
+                      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center p-3 text-center">
+                        <RefreshCw className="w-6 h-6 text-white animate-spin mb-2" />
+                        <span className="text-xs font-mono uppercase text-white">AI Analyzing Garment...</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => frontInputRef.current?.click()}
+                      className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg text-[10px] bg-black/70 hover:bg-black text-white border border-white/20 backdrop-blur-md"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+                <input
+                  ref={frontInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFrontFileChange}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Back Photo (Optional but Recommended) */}
+              <div>
+                <label className="block text-xs font-medium text-luxury-300 mb-1.5">
+                  {category === 'shoes' ? 'Second Angle Photo (Optional)' : 'Back View Photo (Optional, Recommended)'}
+                </label>
+                {!backPreview ? (
+                  <div
+                    onClick={() => backInputRef.current?.click()}
+                    className="h-48 border-2 border-dashed border-white/10 hover:border-white/30 rounded-2xl flex flex-col items-center justify-center p-4 cursor-pointer bg-white/[0.01] hover:bg-white/[0.03] transition-all group"
+                  >
+                    <Camera className="w-6 h-6 text-luxury-400 group-hover:scale-110 transition-transform mb-2" />
+                    <span className="text-xs font-medium text-luxury-300 mb-0.5">Add Back / 2nd Angle</span>
+                    <span className="text-[10px] text-luxury-500">For accurate 360° texture mapping</span>
+                  </div>
+                ) : (
+                  <div className="relative h-48 rounded-2xl overflow-hidden border border-white/10 bg-luxury-900 group">
+                    <img
+                      src={backPreview}
+                      alt="Back Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => backInputRef.current?.click()}
+                      className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg text-[10px] bg-black/70 hover:bg-black text-white border border-white/20 backdrop-blur-md"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+                <input
+                  ref={backInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBackFileChange}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* AI Recognition Result & Editable Form */}
+          <div className="space-y-4 pt-2 border-t border-white/[0.06]">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono uppercase tracking-wider text-luxury-400">
+                Garment Attributes (Verify or Edit)
+              </span>
+              {aiRecognized && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  AI Confidence: {(confidenceScore * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block text-luxury-300 mb-1">Item Name (Optional)</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Crisp Oxford Cotton Shirt"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-sm text-white focus:outline-none focus:border-white/30"
-                  required
+                  placeholder="e.g. Navy Oxford Shirt"
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
                 />
               </div>
 
-              {/* Subcategory */}
               <div>
-                <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                  Category & Classification
-                </label>
+                <label className="block text-luxury-300 mb-1">Garment Type</label>
                 <select
-                  value={subcategory}
-                  onChange={(e) => handleSubcategoryChange(e.target.value as Subcategory)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-luxury-900 border border-white/[0.1] text-sm text-white focus:outline-none focus:border-white/30"
+                  value={itemType}
+                  onChange={(e) => setItemType(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-white capitalize"
                 >
-                  {SUBCATEGORIES.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-luxury-900 text-white">
-                      {s.label} ({s.category.toUpperCase()})
+                  {(category === 'shirt' ? SHIRT_TYPES : category === 'pants' ? PANTS_TYPES : SHOE_TYPES).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Color & Hex */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                    Primary Color
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-6 h-6 rounded-lg border border-white/20 shrink-0"
-                      style={{ backgroundColor: primaryColorHex }}
-                    />
-                    <input
-                      type="text"
-                      value={primaryColor}
-                      onChange={(e) => setPrimaryColor(e.target.value)}
-                      placeholder="e.g. Navy Blue"
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                    Hex Code
-                  </label>
+              {/* Colors */}
+              <div>
+                <label className="block text-luxury-300 mb-1">Primary Color &amp; Hex</label>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-6 h-6 rounded-lg border border-white/20 shrink-0"
+                    style={{ backgroundColor: primaryColorHex }}
+                  />
+                  <input
+                    type="text"
+                    value={primaryColor}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.1] text-white"
+                    placeholder="Color Name"
+                  />
                   <input
                     type="text"
                     value={primaryColorHex}
                     onChange={(e) => setPrimaryColorHex(e.target.value)}
-                    placeholder="#1B263B"
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs font-mono text-white focus:outline-none focus:border-white/30"
+                    className="w-24 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.1] text-white font-mono"
+                    placeholder="#HEX"
                   />
                 </div>
               </div>
 
-              {/* Quick Swatch Bar */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {POPULAR_COLORS.slice(0, 8).map((c) => (
-                  <button
-                    key={c.name}
-                    type="button"
-                    onClick={() => {
-                      setPrimaryColor(c.name);
-                      setPrimaryColorHex(c.hex);
-                    }}
-                    title={c.name}
-                    className={`w-5 h-5 rounded-full border transition-all ${
-                      primaryColorHex === c.hex ? 'scale-125 border-white shadow-sm' : 'border-white/20'
-                    }`}
-                    style={{ backgroundColor: c.hex }}
-                  />
-                ))}
+              <div>
+                <label className="block text-luxury-300 mb-1">Secondary Color (Optional)</label>
+                <input
+                  type="text"
+                  value={secondaryColor}
+                  onChange={(e) => setSecondaryColor(e.target.value)}
+                  placeholder="e.g. White Stripes"
+                  className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
+                />
               </div>
 
-              {/* Style & Fit */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                    Style Aesthetic
-                  </label>
-                  <select
-                    value={style}
-                    onChange={(e) => setStyle(e.target.value as ClothingStyle)}
-                    className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-                  >
-                    {STYLES.map((st) => (
-                      <option key={st} value={st} className="capitalize">
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                    Fit
-                  </label>
-                  <select
-                    value={fit}
-                    onChange={(e) => setFit(e.target.value as ClothingFit)}
-                    className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-                  >
-                    {FITS.map((f) => (
-                      <option key={f} value={f} className="capitalize">
-                        {f}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Pattern & Style */}
+              <div>
+                <label className="block text-luxury-300 mb-1">Pattern</label>
+                <select
+                  value={pattern}
+                  onChange={(e) => setPattern(e.target.value as ClothingPattern)}
+                  className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-white capitalize"
+                >
+                  {PATTERNS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {/* Pattern & Season */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                    Pattern
-                  </label>
-                  <select
-                    value={pattern}
-                    onChange={(e) => setPattern(e.target.value as ClothingPattern)}
-                    className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-                  >
-                    {PATTERNS.map((p) => (
-                      <option key={p} value={p} className="capitalize">
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-luxury-300 mb-1.5">
-                    Season
-                  </label>
-                  <select
-                    value={season}
-                    onChange={(e) => setSeason(e.target.value as Season)}
-                    className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-                  >
-                    {SEASONS.map((s) => (
-                      <option key={s} value={s} className="capitalize">
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-luxury-300 mb-1">Style</label>
+                <select
+                  value={style}
+                  onChange={(e) => setStyle(e.target.value as ClothingStyle)}
+                  className="w-full px-3 py-2 rounded-xl bg-luxury-900 border border-white/[0.1] text-white capitalize"
+                >
+                  {STYLES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-          </div>
-
-          {/* Optional Brand & Notes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/[0.06]">
-            <div>
-              <label className="block text-xs font-medium text-luxury-400 mb-1">
-                Brand / Label (Optional)
-              </label>
-              <input
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="e.g. Ralph Lauren, Zara, Nike"
-                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-luxury-400 mb-1">
-                Fabric & Styling Notes (Optional)
-              </label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Breathable linen, pairs well with dark jeans"
-                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs text-white focus:outline-none focus:border-white/30"
-              />
             </div>
           </div>
 
@@ -507,13 +507,13 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2.5 rounded-xl text-xs font-medium text-luxury-400 hover:text-white hover:bg-white/[0.05] transition-colors"
+              className="px-4 py-2.5 rounded-xl text-xs font-medium text-luxury-400 hover:text-white"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSaving || isAnalyzing || !imagePreview}
+              disabled={isSaving || isAnalyzing || !frontPreview}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-semibold bg-white text-black hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40"
             >
               {isSaving ? (
@@ -524,7 +524,7 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
               ) : (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  <span>Confirm & Save Item</span>
+                  <span>Save to My Wardrobe</span>
                 </>
               )}
             </button>
@@ -534,4 +534,3 @@ export const UploadClothingModal: React.FC<UploadClothingModalProps> = ({ isOpen
     </div>
   );
 };
-

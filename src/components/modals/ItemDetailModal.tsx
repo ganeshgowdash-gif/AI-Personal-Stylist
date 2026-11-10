@@ -6,15 +6,16 @@ import {
   Heart, 
   Trash2, 
   Check, 
-  RotateCcw, 
-  Sparkles, 
-  Tag, 
   Clock, 
-  Shield 
+  Camera, 
+  Eye, 
+  Shirt, 
+  Scissors, 
+  Footprints 
 } from 'lucide-react';
-import { WardrobeItem, ClothingCategory, Subcategory, ClothingPattern, ClothingStyle, ClothingFit, Season } from '@/types/database';
+import { WardrobeItem, ClothingPattern, ClothingStyle } from '@/types/database';
 import { useWardrobe } from '@/context/WardrobeContext';
-import { POPULAR_COLORS, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 
 interface ItemDetailModalProps {
   isOpen: boolean;
@@ -32,37 +33,29 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   if (!isOpen || !item) return null;
 
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(item.name);
-  const [category, setCategory] = useState<ClothingCategory>(item.category);
-  const [subcategory, setSubcategory] = useState<Subcategory>(item.subcategory);
+  const [name, setName] = useState(item.name || '');
+  const [itemType, setItemType] = useState(item.item_type);
   const [primaryColor, setPrimaryColor] = useState(item.primary_color);
   const [primaryColorHex, setPrimaryColorHex] = useState(item.primary_color_hex);
-  const [style, setStyle] = useState<ClothingStyle>(item.style);
-  const [fit, setFit] = useState<ClothingFit>(item.fit);
   const [pattern, setPattern] = useState<ClothingPattern>(item.pattern);
-  const [season, setSeason] = useState<Season>(item.season);
-  const [brand, setBrand] = useState(item.brand || '');
+  const [style, setStyle] = useState<ClothingStyle>(item.style);
   const [notes, setNotes] = useState(item.notes || '');
 
   const handleSave = async () => {
     await updateItem(item.id, {
-      name,
-      category,
-      subcategory,
+      name: name.trim() || null,
+      item_type: itemType,
       primary_color: primaryColor,
       primary_color_hex: primaryColorHex,
-      style,
-      fit,
       pattern,
-      season,
-      brand: brand.trim() ? brand : null,
-      notes: notes.trim() ? notes : null,
+      style,
+      notes: notes.trim() || null,
     });
     setIsEditing(false);
   };
 
   const handleDelete = async () => {
-    if (confirm(`Are you sure you want to remove "${item.name}" from your wardrobe?`)) {
+    if (confirm(`Are you sure you want to delete this ${item.category} from your wardrobe?`)) {
       await deleteItem(item.id);
       onClose();
     }
@@ -75,7 +68,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-luxury-900/50">
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono uppercase tracking-widest text-luxury-400">
-              Wardrobe Piece Specification
+              {item.category.toUpperCase()} DETAILS
             </span>
           </div>
 
@@ -108,18 +101,33 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
         {/* Content */}
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Garment Image */}
+          {/* Photos Showcase */}
           <div className="space-y-3">
             <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-luxury-900 border border-white/10 shadow-lg">
               <img
-                src={item.photo_url}
-                alt={item.name}
-                className="w-full h-full object-cover object-center"
+                src={item.front_photo_url}
+                alt={item.name || item.primary_color}
+                className="w-full h-full object-cover"
               />
-              <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase bg-black/60 text-white backdrop-blur-md border border-white/10">
-                {item.category}
-              </div>
+              <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded text-[9px] font-mono uppercase bg-black/70 text-white">
+                Front View
+              </span>
             </div>
+
+            {/* Back Photo Thumbnail if available */}
+            {item.back_photo_url && (
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                <img
+                  src={item.back_photo_url}
+                  alt="Back View"
+                  className="w-12 h-12 rounded-lg object-cover border border-white/10"
+                />
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-luxury-400 block">Back Photo Attached</span>
+                  <span className="text-xs text-white">Mapped onto 3D back UV</span>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs">
               <div className="flex items-center gap-1.5 text-luxury-400">
@@ -135,23 +143,22 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Details & Edit Mode */}
+          {/* Details & Edit */}
           <div className="space-y-4">
             {!isEditing ? (
               <>
                 <div>
                   <h3 className="text-xl font-serif font-bold text-white tracking-wide">
-                    {item.name}
+                    {item.name || `${item.primary_color} ${item.item_type}`}
                   </h3>
                   <p className="text-xs text-luxury-400 mt-1 capitalize">
-                    {item.subcategory} • {item.style} • {item.fit} fit
+                    {item.item_type} • {item.style}
                   </p>
                 </div>
 
-                {/* Attribute Pills */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                    <span className="text-[10px] font-mono text-luxury-500 uppercase block">Color</span>
+                    <span className="text-[10px] font-mono text-luxury-500 uppercase block">Main Color</span>
                     <div className="flex items-center gap-1.5 mt-0.5 font-medium text-white">
                       <span
                         className="w-3 h-3 rounded-full border border-white/30"
@@ -167,20 +174,20 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                    <span className="text-[10px] font-mono text-luxury-500 uppercase block">Season</span>
-                    <span className="font-medium text-white capitalize mt-0.5 block">{item.season}</span>
+                    <span className="text-[10px] font-mono text-luxury-500 uppercase block">Style</span>
+                    <span className="font-medium text-white capitalize mt-0.5 block">{item.style}</span>
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                    <span className="text-[10px] font-mono text-luxury-500 uppercase block">Brand</span>
-                    <span className="font-medium text-white mt-0.5 block">{item.brand || 'Unbranded'}</span>
+                    <span className="text-[10px] font-mono text-luxury-500 uppercase block">Category</span>
+                    <span className="font-medium text-white capitalize mt-0.5 block">{item.category}</span>
                   </div>
                 </div>
 
                 {item.notes && (
                   <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                     <span className="text-[10px] font-mono text-luxury-500 uppercase block mb-1">
-                      Stylist Notes
+                      Fabric &amp; Cut Notes
                     </span>
                     <p className="text-xs text-luxury-300 leading-relaxed">{item.notes}</p>
                   </div>
@@ -192,15 +199,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     onClick={() => setIsEditing(true)}
                     className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white font-medium border border-white/[0.1] transition-all"
                   >
-                    Edit Classification
+                    Edit Details
                   </button>
                 </div>
               </>
             ) : (
-              /* Editable Form */
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="text-luxury-400 block mb-1">Name</label>
+                  <label className="text-luxury-400 block mb-1">Item Name (Optional)</label>
                   <input
                     type="text"
                     value={name}
@@ -209,16 +215,17 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                   />
                 </div>
 
+                <div>
+                  <label className="text-luxury-400 block mb-1">Item Type</label>
+                  <input
+                    type="text"
+                    value={itemType}
+                    onChange={(e) => setItemType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-luxury-400 block mb-1">Subcategory</label>
-                    <input
-                      type="text"
-                      value={subcategory}
-                      onChange={(e) => setSubcategory(e.target.value as Subcategory)}
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
-                    />
-                  </div>
                   <div>
                     <label className="text-luxury-400 block mb-1">Primary Color</label>
                     <input
@@ -228,37 +235,15 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-luxury-400 block mb-1">Style</label>
+                    <label className="text-luxury-400 block mb-1">Hex Code</label>
                     <input
                       type="text"
-                      value={style}
-                      onChange={(e) => setStyle(e.target.value as ClothingStyle)}
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
+                      value={primaryColorHex}
+                      onChange={(e) => setPrimaryColorHex(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white font-mono"
                     />
                   </div>
-                  <div>
-                    <label className="text-luxury-400 block mb-1">Fit</label>
-                    <input
-                      type="text"
-                      value={fit}
-                      onChange={(e) => setFit(e.target.value as ClothingFit)}
-                      className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-luxury-400 block mb-1">Brand</label>
-                  <input
-                    type="text"
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white"
-                  />
                 </div>
 
                 <div>
@@ -293,4 +278,3 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     </div>
   );
 };
-

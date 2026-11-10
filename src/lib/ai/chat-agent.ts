@@ -18,13 +18,12 @@ export async function processFashionChat(
 
   const wardrobeManifest = wardrobe.map((item) => ({
     id: item.id,
-    name: item.name,
+    name: item.name || `${item.primary_color} ${item.item_type}`,
     category: item.category,
-    subcategory: item.subcategory,
+    item_type: item.item_type,
     primary_color: item.primary_color,
     pattern: item.pattern,
     style: item.style,
-    fit: item.fit,
     times_worn: item.times_worn,
   }));
 
@@ -86,24 +85,25 @@ function generateLocalChatResponse(
   wardrobe: WardrobeItem[]
 ): { reply: string; referencedItems: WardrobeItem[] } {
   const q = query.toLowerCase();
-  const tops = wardrobe.filter((i) => i.category === 'tops');
-  const bottoms = wardrobe.filter((i) => i.category === 'bottoms');
-  const shoes = wardrobe.filter((i) => i.category === 'footwear');
-  const accessories = wardrobe.filter((i) => i.category === 'accessories');
+  const tops = wardrobe.filter((i) => i.category === 'shirt');
+  const bottoms = wardrobe.filter((i) => i.category === 'pants');
+  const shoes = wardrobe.filter((i) => i.category === 'shoes');
 
   // Check matching questions e.g. "Does my X match my Y"
   if (q.includes('match') && (q.includes('shirt') || q.includes('pant') || q.includes('jeans') || q.includes('trouser') || q.includes('chino'))) {
-    const foundTop = tops.find((t) => q.includes(t.primary_color.toLowerCase()) || q.includes(t.subcategory)) || tops[0];
-    const foundBottom = bottoms.find((b) => q.includes(b.primary_color.toLowerCase()) || q.includes(b.subcategory)) || bottoms[0];
+    const foundTop = tops.find((t) => q.includes(t.primary_color.toLowerCase()) || q.includes(t.item_type.toLowerCase())) || tops[0];
+    const foundBottom = bottoms.find((b) => q.includes(b.primary_color.toLowerCase()) || q.includes(b.item_type.toLowerCase())) || bottoms[0];
 
     if (foundTop && foundBottom) {
+      const topName = foundTop.name || `${foundTop.primary_color} ${foundTop.item_type}`;
+      const bottomName = foundBottom.name || `${foundBottom.primary_color} ${foundBottom.item_type}`;
       const isHarmonious = 
         foundTop.primary_color.toLowerCase() !== foundBottom.primary_color.toLowerCase() ||
         foundTop.primary_color.toLowerCase() === 'black';
 
       const reply = isHarmonious
-        ? `Yes, absolutely! Your **${foundTop.name}** in ${foundTop.primary_color} pairs excellently with your **${foundBottom.name}** in ${foundBottom.primary_color}. The balance between ${foundTop.primary_color} on top and ${foundBottom.primary_color} on bottom provides a flattering, structured contrast that avoids visual monotony.`
-        : `While you can wear your **${foundTop.name}** with **${foundBottom.name}**, both are ${foundTop.primary_color}. For higher visual depth, try breaking the monochrome with a contrasting belt or lighter footwear.`;
+        ? `Yes, absolutely! Your **${topName}** in ${foundTop.primary_color} pairs excellently with your **${bottomName}** in ${foundBottom.primary_color}. The balance between ${foundTop.primary_color} on top and ${foundBottom.primary_color} on bottom provides a flattering, structured contrast that avoids visual monotony.`
+        : `While you can wear your **${topName}** with **${bottomName}**, both are ${foundTop.primary_color}. For higher visual depth, try breaking the monochrome with contrasting pants or lighter footwear.`;
 
       const suggestedShoes = shoes[0];
       const refs = [foundTop, foundBottom, suggestedShoes].filter((i): i is WardrobeItem => Boolean(i));
@@ -117,26 +117,26 @@ function generateLocalChatResponse(
 
   // College / Casual recommendations
   if (q.includes('college') || q.includes('school') || q.includes('tomorrow') || q.includes('wear')) {
-    const top = tops.find((t) => t.subcategory === 't-shirt' || t.subcategory === 'shirt') || tops[0];
-    const bottom = bottoms.find((b) => b.subcategory === 'jeans' || b.subcategory === 'chinos') || bottoms[0];
+    const top = tops.find((t) => t.item_type.includes('shirt') || t.item_type.includes('t-shirt')) || tops[0];
+    const bottom = bottoms.find((b) => b.item_type.includes('jeans') || b.item_type.includes('chinos')) || bottoms[0];
     const footwear = shoes[0];
 
     const refs = [top, bottom, footwear].filter((i): i is WardrobeItem => Boolean(i));
     return {
-      reply: `For college or a daytime outing, I recommend an effortless smart-casual pairing from your collection:\n\n- **Top:** ${top?.name || 'Casual top'} (${top?.primary_color})\n- **Bottom:** ${bottom?.name || 'Clean pants'} (${bottom?.primary_color})\n- **Footwear:** ${footwear?.name || 'Sneakers'}\n\nThis look gives you breathable mobility for walking between lectures while keeping a sharp, intentional silhouette.`,
+      reply: `For college or a daytime outing, I recommend an effortless smart-casual pairing from your collection:\n\n- **Shirt:** ${top?.name || top?.item_type || 'Casual shirt'} (${top?.primary_color})\n- **Pants:** ${bottom?.name || bottom?.item_type || 'Clean pants'} (${bottom?.primary_color})\n- **Shoes:** ${footwear?.name || footwear?.item_type || 'Sneakers'}\n\nThis look gives you breathable mobility while keeping a sharp, intentional silhouette.`,
       referencedItems: refs,
     };
   }
 
   // Formal outfit recommendation
   if (q.includes('formal') || q.includes('office') || q.includes('meeting')) {
-    const top = tops.find((t) => t.subcategory === 'shirt' || t.style === 'formal') || tops[0];
-    const bottom = bottoms.find((b) => b.subcategory === 'chinos' || b.subcategory === 'formal pants') || bottoms[0];
-    const footwear = shoes.find((s) => s.subcategory === 'formal shoes') || shoes[0];
+    const top = tops.find((t) => t.item_type.includes('formal') || t.style === 'formal') || tops[0];
+    const bottom = bottoms.find((b) => b.item_type.includes('formal') || b.item_type.includes('trousers') || b.item_type.includes('chinos')) || bottoms[0];
+    const footwear = shoes.find((s) => s.item_type.includes('formal') || s.item_type.includes('loafers')) || shoes[0];
 
     const refs = [top, bottom, footwear].filter((i): i is WardrobeItem => Boolean(i));
     return {
-      reply: `Here is a refined business ensemble curated directly from your items:\n\n- **Shirt:** ${top?.name || 'Dress shirt'} in crisp ${top?.primary_color}\n- **Trousers:** ${bottom?.name || 'Formal trousers'} in ${bottom?.primary_color}\n- **Shoes:** ${footwear?.name || 'Dress shoes'}\n\nEnsure your shirt is cleanly tucked and sleeve cuffs sit right at the wrist bone for optimal proportions.`,
+      reply: `Here is a refined business ensemble curated directly from your items:\n\n- **Shirt:** ${top?.name || top?.item_type || 'Dress shirt'} in crisp ${top?.primary_color}\n- **Pants:** ${bottom?.name || bottom?.item_type || 'Formal trousers'} in ${bottom?.primary_color}\n- **Shoes:** ${footwear?.name || footwear?.item_type || 'Dress shoes'}\n\nEnsure your shirt is cleanly tucked for optimal proportions.`,
       referencedItems: refs,
     };
   }
@@ -144,7 +144,7 @@ function generateLocalChatResponse(
   // "What should I buy next"
   if (q.includes('buy') || q.includes('shopping') || q.includes('missing')) {
     return {
-      reply: `Based on an audit of your wardrobe, the top versatile essentials to expand your options are:\n\n1. **Tailored Beige Chinos:** Unlocks light-neutral contrast for dark shirts.\n2. **Minimalist White Low-Top Leather Sneakers:** Matches virtually every casual and smart-casual outfit.\n3. **Brushed Silver Minimalist Watch:** Adds subtle polish without loud branding.\n\nYou can view the full versatility ratings and matching counts in the **Smart Shopping** tab!`,
+      reply: `Based on an audit of your wardrobe, the top versatile essentials to expand your options are:\n\n1. **Tailored Beige Chinos:** Unlocks light-neutral contrast for dark shirts.\n2. **Minimalist White Low-Top Leather Sneakers:** Matches virtually every casual and smart-casual outfit.\n3. **Crisp Oxford Cotton Shirt:** Provides clean layering versatility.\n\nYou can view the full versatility ratings and matching counts in the **Smart Shopping** tab!`,
       referencedItems: wardrobe.slice(0, 3),
     };
   }
@@ -152,7 +152,7 @@ function generateLocalChatResponse(
   // Specific item query (e.g. "shoes", "sneakers", "blue jeans")
   const matchedItems = wardrobe.filter((item) =>
     q.includes(item.primary_color.toLowerCase()) ||
-    q.includes(item.subcategory.toLowerCase()) ||
+    q.includes(item.item_type.toLowerCase()) ||
     q.includes(item.category.toLowerCase())
   );
 
