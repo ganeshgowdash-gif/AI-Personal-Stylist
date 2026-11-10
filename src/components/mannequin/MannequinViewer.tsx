@@ -380,13 +380,13 @@ export const MannequinViewer: React.FC<MannequinViewerProps> = ({
     );
     shirtGeo.scale(1.02, 1.0, 0.74 * prop.torsoScaleZ);
 
-    // Adjust UV coordinates for Front / Back projection
+    // Adjust UV coordinates for Front [0..0.5] / Back [0.5..1.0] projection
     const uvAttr = shirtGeo.attributes.uv;
     for (let i = 0; i < uvAttr.count; i++) {
       let u = uvAttr.getX(i);
       let v = uvAttr.getY(i);
-      // Map cylinder 360 wrap cleanly into front [0.25..0.75]
-      uvAttr.setXY(i, u, v);
+      let shiftedU = (u + 0.25) % 1.0;
+      uvAttr.setXY(i, shiftedU, v);
     }
     shirtGeo.attributes.uv.needsUpdate = true;
 
@@ -412,6 +412,14 @@ export const MannequinViewer: React.FC<MannequinViewerProps> = ({
       32
     );
     pantsPelvisGeo.scale(1.02, 1.0, 0.78 * prop.torsoScaleZ);
+    const pUvAttr = pantsPelvisGeo.attributes.uv;
+    for (let i = 0; i < pUvAttr.count; i++) {
+      let u = pUvAttr.getX(i);
+      let v = pUvAttr.getY(i);
+      let shiftedU = (u + 0.25) % 1.0;
+      pUvAttr.setXY(i, shiftedU, v);
+    }
+    pantsPelvisGeo.attributes.uv.needsUpdate = true;
     const defaultPantsMat = new THREE.MeshStandardMaterial({
       color: 0x202024,
       roughness: 0.75,
@@ -471,37 +479,86 @@ export const MannequinViewer: React.FC<MannequinViewerProps> = ({
     rightShoeMeshRef.current = rightShoe;
   };
 
+  // Composite Front/Back Canvas Texture Loader
+  const loadGarmentCompositeTexture = (
+    frontUrl: string,
+    backUrl: string | null | undefined,
+    fallbackHex: string,
+    onLoaded: (texture: THREE.CanvasTexture) => void
+  ) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Fill background with user's verified primary color for seamless edge continuation
+    ctx.fillStyle = fallbackHex || '#202024';
+    ctx.fillRect(0, 0, 1024, 1024);
+
+    const frontImg = new Image();
+    frontImg.crossOrigin = 'anonymous';
+
+    frontImg.onload = () => {
+      // Draw authentic front photo on left half of UV canvas (0.0 to 0.5)
+      ctx.drawImage(frontImg, 0, 0, 512, 1024);
+
+      if (backUrl) {
+        const backImg = new Image();
+        backImg.crossOrigin = 'anonymous';
+        backImg.onload = () => {
+          // Draw authentic back photo on right half of UV canvas (0.5 to 1.0)
+          ctx.drawImage(backImg, 512, 0, 512, 1024);
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          onLoaded(texture);
+        };
+        backImg.onerror = () => {
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          onLoaded(texture);
+        };
+        backImg.src = backUrl;
+      } else {
+        // When no back photo was uploaded, right half remains tinted with dominant primary color fallback
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        onLoaded(texture);
+      }
+    };
+
+    frontImg.onerror = () => {
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      onLoaded(texture);
+    };
+
+    frontImg.src = frontUrl;
+  };
+
   // Map user's actual original photos onto the 3D garment meshes
   const applyGarmentTextures = () => {
     setIsLoadingTextures(true);
 
-    // Apply Shirt Texture
+    // 1. Apply Shirt Texture (Front + Back)
     if (shirtMeshRef.current) {
       if (shirt?.front_photo_url) {
-        textureLoader.current.load(
+        loadGarmentCompositeTexture(
           shirt.front_photo_url,
-          (tex) => {
-            tex.wrapS = THREE.ClampToEdgeWrapping;
-            tex.wrapT = THREE.ClampToEdgeWrapping;
-            tex.colorSpace = THREE.SRGBColorSpace;
-
-            const mat = new THREE.MeshStandardMaterial({
-              map: tex,
-              color: shirt.primary_color_hex ? new THREE.Color(shirt.primary_color_hex) : 0xffffff,
-              roughness: 0.7,
-              metalness: 0.05,
-            });
-            if (shirtMeshRef.current) {
-              shirtMeshRef.current.material = mat;
-            }
-          },
-          undefined,
-          () => {
-            // Fallback to primary color
+          shirt.back_photo_url,
+          shirt.primary_color_hex || '#3b82f6',
+          (texture) => {
             if (shirtMeshRef.current) {
               shirtMeshRef.current.material = new THREE.MeshStandardMaterial({
-                color: shirt.primary_color_hex || 0x3b82f6,
+                map: texture,
                 roughness: 0.7,
+                metalness: 0.05,
               });
             }
           }
@@ -515,38 +572,24 @@ export const MannequinViewer: React.FC<MannequinViewerProps> = ({
       }
     }
 
-    // Apply Pants Texture
+    // 2. Apply Pants Texture (Front + Back)
     if (pantsMeshRef.current && pantsMeshRef.current.parent) {
-      const pantsColor = pants?.primary_color_hex ? new THREE.Color(pants.primary_color_hex) : 0x202024;
-
       if (pants?.front_photo_url) {
-        textureLoader.current.load(
+        loadGarmentCompositeTexture(
           pants.front_photo_url,
-          (tex) => {
-            tex.wrapS = THREE.RepeatWrapping;
-            tex.wrapT = THREE.RepeatWrapping;
-            tex.repeat.set(1, 2);
-            tex.colorSpace = THREE.SRGBColorSpace;
-
+          pants.back_photo_url,
+          pants.primary_color_hex || '#202024',
+          (texture) => {
             const pantsMat = new THREE.MeshStandardMaterial({
-              map: tex,
-              color: pantsColor,
+              map: texture,
               roughness: 0.75,
-              metalness: 0.1,
+              metalness: 0.05,
             });
 
-            // Apply to all children of pants group
             pantsMeshRef.current?.parent?.children.forEach((child) => {
               if (child instanceof THREE.Mesh) {
                 child.material = pantsMat;
               }
-            });
-          },
-          undefined,
-          () => {
-            const fallbackMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.75 });
-            pantsMeshRef.current?.parent?.children.forEach((c) => {
-              if (c instanceof THREE.Mesh) c.material = fallbackMat;
             });
           }
         );
@@ -558,9 +601,8 @@ export const MannequinViewer: React.FC<MannequinViewerProps> = ({
       }
     }
 
-    // Apply Shoes Texture & Color
+    // 3. Apply Shoes Texture & Color
     const shoeColor = shoes?.primary_color_hex ? new THREE.Color(shoes.primary_color_hex) : 0x1c1c20;
-
     const shoePhoto = shoes?.side_photo_url || shoes?.front_photo_url;
     if (shoePhoto) {
       textureLoader.current.load(
@@ -569,9 +611,8 @@ export const MannequinViewer: React.FC<MannequinViewerProps> = ({
           tex.colorSpace = THREE.SRGBColorSpace;
           const shoeMat = new THREE.MeshStandardMaterial({
             map: tex,
-            color: shoeColor,
             roughness: 0.6,
-            metalness: 0.2,
+            metalness: 0.1,
           });
           if (leftShoeMeshRef.current) leftShoeMeshRef.current.material = shoeMat;
           if (rightShoeMeshRef.current) rightShoeMeshRef.current.material = shoeMat;
